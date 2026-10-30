@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Base de datos MySQL para Usuarios
+  db-usuario:
+    image: mysql:8.0
+    container_name: db-usuario
+    environment:
+      MYSQL_DATABASE: barcito_usuario
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+
+  # Base de datos MySQL para Menú
+  db-menu:
+    image: mysql:8.0
+    container_name: db-menu
+    environment:
+      MYSQL_DATABASE: barcito_menu
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+
+  # Servidor de Mensajería RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # Puerto de mensajería AMQP
+      - "15672:15672" # Dashboard web
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+
+  # 1. Eureka Server
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+
+  # 2. Gateway Service
+  gateway-service:
+    build: ./gateway-service
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka-server
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+
+  # 3. Usuario Service
+  usuario-service:
+    build: ./usuario-service
+    container_name: usuario-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - eureka-server
+      - db-usuario
+      - rabbitmq
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db-usuario:3306/barcito_usuario?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+
+  # 4. Menu Service
+  menu-service:
+    build: ./menu-service
+    container_name: menu-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - eureka-server
+      - db-menu
+      - rabbitmq
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db-menu:3306/barcito_menu?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
